@@ -19,6 +19,11 @@ class _feedState extends State<feed> {
   User user;
   _feedState({this.user});
   GlobalKey<ScaffoldState> _scaffoldkey = GlobalKey();
+  List<String> categories = [];
+  @override
+  void initState() {
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,18 +31,64 @@ class _feedState extends State<feed> {
       key: _scaffoldkey,
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          final result = Navigator.push(context, MaterialPageRoute(
-            builder: (context) => AddWardrobe(user:user),
-          ));
+          Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => AddWardrobe(user: user),
+              ));
         },
         child: Icon(Icons.add),
         backgroundColor: styles.appDarkVioletColor,
       ),
       body: Column(
         children: [
-          Center(
-            child: Text("Hello"),
-          )
+          Flexible(
+              child: StreamBuilder(
+            stream: FirebaseDatabase.instance
+                .reference()
+                .child("Users")
+                .child(user.uid)
+                .child('Wardrobe')
+                .onValue,
+            builder: (context, snapshot) {
+              if (snapshot.hasData &&
+                  !snapshot.hasError &&
+                  snapshot.data.snapshot.value != null) {
+                DataSnapshot snap = snapshot.data.snapshot;
+                Map<dynamic, dynamic> snapmap = snap.value;
+                categories.clear();
+                List<String> _imglist = [];
+                snapmap.forEach((key, value) {
+                  categories.add(key);
+                  print(key);
+                  //print(value);
+                });
+                for (int i = 1; i < snapmap.values.length; i++) {
+                  _imglist.add(snapmap.values.elementAt(i)['image']);
+                  print(snapmap.values.elementAt(i)['image']);
+                }
+                return ListView.builder(
+                  //shrinkWrap: true,
+                  itemBuilder: (context, index) {
+                    return Container(
+                        height: 200,
+                        child: customPlaceHolder(
+                            categories[index],
+                            IconButton(
+                              icon: Icon(Icons.menu),
+                              onPressed: () {},
+                            ),
+                            _imglist));
+                  },
+                  itemCount: categories.length,
+                );
+              } else {
+                return Center(
+                  child: Text("No Wardrobe Found!"),
+                );
+              }
+            },
+          )),
         ],
       ),
     );
@@ -114,33 +165,35 @@ class _feedState extends State<feed> {
   //   });
   // }
 
-  Future<void> loadAssets() async {
-    // try {
-    //   resultList = await MultiImagePicker.pickImages(
-    //     maxImages: 300,
-    //     enableCamera: true,
-    //     selectedAssets: images,
-    //     cupertinoOptions: CupertinoOptions(takePhotoIcon: "chat"),
-    //     materialOptions: MaterialOptions(
-    //       actionBarColor: "#FFA600",
-    //       actionBarTitle: "Wardrobe",
-    //       allViewTitle: "All Photos",
-    //       useDetailsView: false,
-    //       selectCircleStrokeColor: "#423B7E",
-    //     ),
-    //   );
-    // } on Exception catch (e) {
-    //   error = e.toString();
-    // }
-
-    // // If the widget was removed from the tree while the asynchronous platform
-    // // message was in flight, we want to discard the reply rather than calling
-    // // setState to update our non-existent appearance.
-    // if (!mounted) return;
-
-    // setState(() {
-    //   images = resultList;
-    //   //error = error;
-    // });
+  Widget customPlaceHolder(@required String title,
+      @required IconButton iconButton, @required List<String> _imglist) {
+    return Container(
+      child: Column(
+        children: [
+          ListTile(
+            title: Text(title),
+            trailing: iconButton,
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemBuilder: (context, index) {
+                return SizedBox(
+                  height: SizeConfig.heightMultiplier * 20,
+                  width: SizeConfig.widthMultiplier * 40,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Image(image: NetworkImage(_imglist[index])),
+                  ),
+                );
+              },
+              // shrinkWrap: true,
+              // physics: ClampingScrollPhysics(),
+              scrollDirection: Axis.horizontal,
+              itemCount: _imglist.length,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

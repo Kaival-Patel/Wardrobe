@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:cached_network_image/cached_network_image.dart';
+
 import 'AddWardrobe.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -20,9 +22,72 @@ class _feedState extends State<feed> {
   _feedState({this.user});
   GlobalKey<ScaffoldState> _scaffoldkey = GlobalKey();
   List<String> categories = [];
+  List<String> _imglist = [];
+  List<String> _imglist1 = [];
+  List<String> _imglist2 = [];
+  TextEditingController CategoryCTRL = TextEditingController();
+  Map<String, List<String>> mData = Map();
   @override
   void initState() {
     super.initState();
+    //fetchCategories();
+    //fetchImages();
+  }
+
+  Future<void> fetchCategories() async {
+    setState(() {
+      categories.clear();
+    });
+
+    FirebaseDatabase.instance
+        .reference()
+        .child('Users')
+        .child(user.uid)
+        .child('Wardrobe')
+        .once()
+        .then((DataSnapshot data) {
+      Map<dynamic, dynamic> categoriesData = data.value;
+      categoriesData.forEach((key, value) {
+        setState(() {
+          categories.add(key);
+        });
+      });
+    }).whenComplete(() {
+      print("IMAGES");
+      fetchImages();
+    });
+  }
+
+  Future<void> fetchImages() async {
+    setState(() {
+      _imglist.clear();
+    });
+    if (categories.length > 0) {
+      categories.forEach((element) {
+        print("SEARCHING $element");
+        FirebaseDatabase.instance
+            .reference()
+            .child('Users')
+            .child(user.uid)
+            .child('Wardrobe')
+            .child(element)
+            .child('images')
+            .once()
+            .then((DataSnapshot data) {
+          Map<dynamic, dynamic> imagesData = data.value;
+          imagesData.forEach((key, value) {
+            setState(() {
+              _imglist.add(value);
+            });
+          });
+        });
+        print(_imglist);
+        mData.putIfAbsent(element, () => _imglist);
+        setState(() {
+          _imglist.clear();
+        });
+      });
+    }
   }
 
   @override
@@ -42,6 +107,7 @@ class _feedState extends State<feed> {
       ),
       body: Column(
         children: [
+          
           Flexible(
               child: StreamBuilder(
             stream: FirebaseDatabase.instance
@@ -56,17 +122,28 @@ class _feedState extends State<feed> {
                   snapshot.data.snapshot.value != null) {
                 DataSnapshot snap = snapshot.data.snapshot;
                 Map<dynamic, dynamic> snapmap = snap.value;
+                _imglist.clear();
                 categories.clear();
-                List<String> _imglist = [];
+                int size;
                 snapmap.forEach((key, value) {
                   categories.add(key);
-                  print(key);
-                  //print(value);
+                  print("KEY:${key}");
+                  print("VALUES:${value['images']}");
+                  FirebaseDatabase.instance
+                      .reference()
+                      .child("Users")
+                      .child(user.uid)
+                      .child('Wardrobe')
+                      .child(key)
+                      .child('images')
+                      .once()
+                      .then((DataSnapshot snap) {
+                    size = snap.value.values.length;
+                  });
+                  
                 });
-                for (int i = 1; i < snapmap.values.length; i++) {
-                  _imglist.add(snapmap.values.elementAt(i)['image']);
-                  print(snapmap.values.elementAt(i)['image']);
-                }
+
+                
                 return ListView.builder(
                   //shrinkWrap: true,
                   itemBuilder: (context, index) {
@@ -76,9 +153,88 @@ class _feedState extends State<feed> {
                             categories[index],
                             IconButton(
                               icon: Icon(Icons.menu),
-                              onPressed: () {},
+                              onPressed: () {
+                                showDialog(
+                                    context: context,
+                                    child: AlertDialog(
+                                      title: Text("Action"),
+                                      content: Container(
+                                        height:
+                                            SizeConfig.heightMultiplier * 6.5,
+                                        child: Column(
+                                          children: [
+                                            InkWell(
+                                              child: Text("Edit Name"),
+                                              onTap: () {
+                                                showDialog(
+                                                    context: context,
+                                                    child: AlertDialog(
+                                                      title: Text("Edit Name"),
+                                                      content: Container(
+                                                        height: SizeConfig
+                                                                .heightMultiplier *
+                                                            6.5,
+                                                        child: Column(
+                                                          children: [
+                                                            TextField(
+                                                                controller:
+                                                                    CategoryCTRL),
+                                                            Visibility(
+                                                                visible: CategoryCTRL
+                                                                        .text !=
+                                                                    categories[
+                                                                        index],
+                                                                child:
+                                                                    RaisedButton(
+                                                                  child: Text(
+                                                                      "OK"),
+                                                                  onPressed:
+                                                                      () {
+                                                                    FirebaseDatabase
+                                                                        .instance
+                                                                        .reference()
+                                                                        .child(
+                                                                            "Users")
+                                                                        .child(user
+                                                                            .uid)
+                                                                        .child(
+                                                                            'Wardrobe')
+                                                                        .update(
+                                                                            {});
+                                                                  },
+                                                                ))
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ));
+                                              },
+                                            ),
+                                            InkWell(
+                                              child: Text(
+                                                "Delete Category",
+                                                style: TextStyle(
+                                                    color: Colors.red),
+                                              ),
+                                              onTap: () {
+                                                FirebaseDatabase.instance
+                                                    .reference()
+                                                    .child("Users")
+                                                    .child(user.uid)
+                                                    .child('Wardrobe')
+                                                    .child(categories[index])
+                                                    .remove();
+                                                Navigator.pop(context);
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ));
+                                print(categories[index]);
+                              },
                             ),
-                            _imglist));
+                            mData,
+                            size));
                   },
                   itemCount: categories.length,
                 );
@@ -94,79 +250,12 @@ class _feedState extends State<feed> {
     );
   }
 
-  // Future<void> showAddWardrobe() async {
-  //   DatabaseReference dbref = FirebaseDatabase.instance
-  //       .reference()
-  //       .child('Users')
-  //       .child(user.uid)
-  //       .child("Wardrobe");
-  //   showDialog(
-  //       context: context,
-  //       barrierDismissible: true,
-  //       child: Container(
-  //         height: SizeConfig.heightMultiplier * 90,
-  //         decoration: BoxDecoration(borderRadius: BorderRadius.circular(25.0)),
-  //         child: AlertDialog(
-  //             content: SingleChildScrollView(
-  //           child: Column(
-  //             children: [
-  //               Padding(
-  //                 padding: EdgeInsets.all(SizeConfig.imageSizeMultiplier * 2),
-  //                 child: Text("Upload the Wardrobe Pictures"),
-  //               ),
-  //               Padding(
-  //                 padding: EdgeInsets.all(SizeConfig.imageSizeMultiplier * 2),
-  //                 child: RaisedButton(
-  //                   child: Text(
-  //                     _images.length > 0?"Select Pictures":"Add more",
-  //                     style: TextStyle(color: Colors.white),
-  //                   ),
-  //                   color: styles.appDarkVioletColor,
-  //                   onPressed: () async {
-  //                     await pickImages();
-  //                   },
-  //                 ),
-  //               ),
-  //               Padding(
-  //                   padding: EdgeInsets.all(SizeConfig.imageSizeMultiplier * 2),
-  //                   child: _images.length > 0
-  //                       ? ListView.builder(
-  //                         itemBuilder:(context,index)=>SizedBox(height: 50,width: 50,child: Image.file(_images[index]),),
-  //                         itemCount: _images.length,
-  //                         )
-  //                       : Container()),
-  //               Padding(
-  //                   padding: EdgeInsets.all(SizeConfig.imageSizeMultiplier * 2),
-  //                   child: DropdownButton<String>(
-  //                     onChanged: (value) => print(value),
-  //                     items: <String>['A', 'B', 'C', 'D'].map(
-  //                       (String value) {
-  //                         return new DropdownMenuItem<String>(
-  //                           value: value,
-  //                           child: new Text(value),
-  //                         );
-  //                       },
-  //                     ).toList(),
-  //                   )),
-  //             ],
-  //           ),
-  //         )),
-  //       ));
-  // }
-
-  // Future<void> pickImages() async {
-  //   File _image;
-  //   final picker = ImagePicker();
-  //   final pickedFile = await picker.getImage(source: ImageSource.gallery);
-  //   setState(() {
-  //     if (pickedFile != null) {
-  //       _images.add(File(pickedFile.path));
-  //     }
-  //   });
-  // }
-
-  Widget customPlaceHolder(@required String title,
-      @required IconButton iconButton, @required List<String> _imglist) {
+  
+  Widget customPlaceHolder(String title, IconButton iconButton,
+      Map<String, List<String>> data, int size) {
+    Map<dynamic, dynamic> mapShot = Map();
+    List<String> images = [];
+    //Rprint("SIZE:$size");
     return Container(
       child: Column(
         children: [
@@ -174,24 +263,59 @@ class _feedState extends State<feed> {
             title: Text(title),
             trailing: iconButton,
           ),
-          Expanded(
+          FutureBuilder(
+                  builder: (context, projectSnap) {
+                    if (projectSnap.connectionState == ConnectionState.none &&
+                        projectSnap.hasData == null) {
+                      //print('project snapshot data is: ${projectSnap.data}');
+                      return Text("No Data Found");
+                    }
+                    return 
+                    Expanded(
             child: ListView.builder(
               itemBuilder: (context, index) {
                 return SizedBox(
-                  height: SizeConfig.heightMultiplier * 20,
-                  width: SizeConfig.widthMultiplier * 40,
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Image(image: NetworkImage(_imglist[index])),
-                  ),
-                );
+                        height: SizeConfig.heightMultiplier * 20,
+                        width: SizeConfig.widthMultiplier * 40,
+                        child: Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: mapShot.values.length > 0
+                                ? Image(
+                                    image: NetworkImage(
+                                        mapShot.values.elementAt(index)),
+                                  )
+                                : CircularProgressIndicator())
+                        // child: Image(
+                        //   image: NetworkImage(mData.values.elementAt(index)[index]),
+                        // )),
+                        );
               },
               // shrinkWrap: true,
               // physics: ClampingScrollPhysics(),
               scrollDirection: Axis.horizontal,
-              itemCount: _imglist.length,
+              itemCount: images.length,
             ),
-          ),
+          );
+                    
+                  },
+                  future: FirebaseDatabase.instance
+                      .reference()
+                      .child("Users")
+                      .child(user.uid)
+                      .child('Wardrobe')
+                      .child(title)
+                      .child('images')
+                      .once()
+                      .then((DataSnapshot shot) {
+                    mapShot = shot.value;
+                    for (int i = 0; i < mapShot.values.length; i++) {
+                      //print("MAPSHOT=>${mapShot.values.elementAt(i)}");
+                      images.add(mapShot.values.elementAt(i));
+                    }
+                  }),
+                )
+          
+          //: CircularProgressIndicator(),
         ],
       ),
     );

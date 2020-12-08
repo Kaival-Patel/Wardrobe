@@ -7,6 +7,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:multi_image_picker/multi_image_picker.dart';
+import 'package:uuid/uuid.dart';
 import 'package:wardrobe/config/size_config.dart';
 import 'package:wardrobe/config/styles.dart';
 
@@ -255,8 +256,7 @@ class _AddWardrobeState extends State<AddWardrobe> {
                                 },
                               ).toList(),
                             );
-                          }
-                          else{
+                          } else {
                             return DropdownButton<String>(
                               onChanged: (String value) {
                                 setState(() {
@@ -331,14 +331,15 @@ class _AddWardrobeState extends State<AddWardrobe> {
     });
     for (int i = 0; i < _images.length; i++) {
       String downloadURL = "";
+      String uuid = Uuid().v4();
       try {
         Reference firebaseStorageRef =
             FirebaseStorage.instance.ref().child('uploads/${_images[i].path}');
         TaskSnapshot uploadTask =
             await firebaseStorageRef.putFile(_images[i]).whenComplete(() async {
           downloadURL = await firebaseStorageRef.getDownloadURL();
-          dbref.child(category).child('${i + 1}').set({
-            'image': '$downloadURL',
+          dbref.child(category).child('images').update({
+            uuid: '$downloadURL',
           }).then((value) {
             _scaffoldkey.currentState.showSnackBar(SnackBar(
                 content: Text(
@@ -353,6 +354,7 @@ class _AddWardrobeState extends State<AddWardrobe> {
         _scaffoldkey.currentState.showSnackBar(
             SnackBar(content: Text("Error Uploading the Data,Try Later!")));
       }
+      uuid = "";
     }
     setState(() {
       isUploading = false;
